@@ -52,8 +52,12 @@ def quantize_nvfp4(tensor: torch.Tensor) -> PackedNVFP4:
     absmax = blocks.abs().amax(dim=-1)
     raw_scales = torch.where(absmax == 0, torch.ones_like(absmax), absmax / E2M1_MAX)
     scales = raw_scales.clamp(max=FP8_E4M3_MAX).to(torch.float8_e4m3fn)
-    normalized = blocks / scales.float().unsqueeze(-1)
+    dequant_scales = scales.float()
+    zero_scale = dequant_scales == 0
+    safe_scales = torch.where(zero_scale, torch.ones_like(dequant_scales), dequant_scales)
+    normalized = blocks / safe_scales.unsqueeze(-1)
     codes = encode_e2m1(normalized)
+    codes = torch.where(zero_scale.unsqueeze(-1), torch.zeros_like(codes), codes)
     flat_codes = codes.reshape(rows, padded_cols)
     packed = flat_codes[:, 0::2] | (flat_codes[:, 1::2] << 4)
     return PackedNVFP4(packed=packed, scales=scales, original_shape=(rows, cols))
