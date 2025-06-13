@@ -45,6 +45,13 @@ def test_mutated_scale_changes_reconstruction():
     torch.testing.assert_close(mutated.dequantize(), quantized.dequantize() * 2)
 
 
+def test_fp8_scale_underflow_quantizes_tiny_block_to_zero():
+    quantized = quantize_nvfp4(torch.full((1, 16), 1e-12))
+    assert torch.count_nonzero(quantized.scales.float()) == 0
+    assert torch.count_nonzero(quantized.unpack()) == 0
+    assert torch.count_nonzero(quantized.dequantize()) == 0
+
+
 def test_signed_zero_preserves_its_encoding_sign():
     codes = encode_e2m1(torch.tensor([-0.0, 0.0]))
     assert torch.equal(codes, torch.tensor([8, 0], dtype=torch.uint8))
